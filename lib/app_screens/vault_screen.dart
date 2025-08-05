@@ -1,13 +1,12 @@
-// Models
-// Main Vault Screen
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:locknote/app_screens/add_credentials_screen.dart';
+import 'package:locknote/app_screens/view_credential_screen.dart';
 import 'package:locknote/app_screens/draft_screen.dart';
 import 'package:locknote/app_screens/generate_screen.dart';
 import 'package:locknote/app_screens/settings_screen.dart';
 import 'package:locknote/models/credential_model.dart';
-
+import 'package:locknote/services/storage_service.dart';
 
 class VaultScreen extends StatefulWidget {
   const VaultScreen({Key? key}) : super(key: key);
@@ -21,54 +20,39 @@ class _VaultScreenState extends State<VaultScreen> {
   String _selectedFilter = 'All';
   final TextEditingController _searchController = TextEditingController();
   
-  // Sample data
-  final List<Credential> _credentials = [
-    Credential(
-      id: '1',
-      platform: 'Instagram',
-      email: 'okosolarry@gmail.com',
-      password: 'password123',
-      category: CredentialCategory.personal,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ),
-    Credential(
-      id: '2',
-      platform: 'Facebook',
-      email: 'okosolarry@gmail.com',
-      password: 'password123',
-      category: CredentialCategory.social,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ),
-    Credential(
-      id: '3',
-      platform: 'Facebook',
-      email: 'okosolarry@gmail.com',
-      password: 'password123',
-      category: CredentialCategory.personal,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ),
-    Credential(
-      id: '4',
-      platform: 'Facebook',
-      email: 'okosolarry@gmail.com',
-      password: 'password123',
-      category: CredentialCategory.personal,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ),
-    Credential(
-      id: '5',
-      platform: 'Facebook',
-      email: 'okosolarry@gmail.com',
-      password: 'password123',
-      category: CredentialCategory.personal,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ),
-  ];
+  // This will now hold the actual stored credentials
+  List<Credential> _credentials = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCredentials();
+  }
+
+  // Load credentials from storage when screen starts
+  Future<void> _loadCredentials() async {
+    try {
+      final credentials = await StorageService.loadCredentials();
+      setState(() {
+        _credentials = credentials;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading credentials: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Refresh credentials after any changes
+  Future<void> _refreshCredentials() async {
+    setState(() {
+      _isLoading = true;
+    });
+    await _loadCredentials();
+  }
 
   List<Credential> get _filteredCredentials {
     List<Credential> filtered = _credentials;
@@ -78,12 +62,14 @@ class _VaultScreenState extends State<VaultScreen> {
       filtered = filtered.where((cred) => 
         cred.category.displayName == _selectedFilter).toList();
     }
+    
     // Apply search
     if (_searchController.text.isNotEmpty) {
       filtered = filtered.where((cred) =>
         cred.platform.toLowerCase().contains(_searchController.text.toLowerCase()) ||
         cred.email.toLowerCase().contains(_searchController.text.toLowerCase())).toList();
     }
+    
     return filtered;
   }
 
@@ -99,11 +85,17 @@ class _VaultScreenState extends State<VaultScreen> {
             : const SettingsScreen(),
       ),
       floatingActionButton: _currentIndex == 0 ? FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          // Navigate to add credential screen and wait for result
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const AddCredentialScreen()),
           );
+          
+          // If a credential was added, refresh the list
+          if (result != null) {
+            await _refreshCredentials();
+          }
         },
         backgroundColor: Colors.black,
         child: const Icon(Icons.add, color: Colors.cyanAccent, size: 30),
@@ -130,11 +122,11 @@ class _VaultScreenState extends State<VaultScreen> {
           type: BottomNavigationBarType.fixed,
           items: [
             BottomNavigationBarItem(
-              icon: Icon(_currentIndex == 0 ? Icons.lock_reset_rounded : Icons.lock_reset_rounded),
+              icon: Icon(_currentIndex == 0 ? Icons.lock_outline : Icons.lock_outline),
               label: 'Vault',
             ),
             BottomNavigationBarItem(
-              icon: Icon(_currentIndex == 1 ? Icons.cloud_sync_outlined : Icons.cloud_sync_outlined),
+              icon: Icon(_currentIndex == 1 ? Icons.cloud_download_outlined : Icons.cloud_download_outlined),
               label: 'Generate',
             ),
             BottomNavigationBarItem(
@@ -165,7 +157,7 @@ class _VaultScreenState extends State<VaultScreen> {
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(10)
                 ),
-                child:  Center(
+                child: Center(
                   child: Text(
                     '*',
                     style: GoogleFonts.urbanist(
@@ -175,13 +167,11 @@ class _VaultScreenState extends State<VaultScreen> {
                     ),
                   )
                 ),
-
               ),
-
-              SizedBox(width: 10,),
+              const SizedBox(width: 10),
               Text(
                 'Lock-Note',
-                  style: GoogleFonts.urbanist(
+                style: GoogleFonts.urbanist(
                   fontSize: 27,
                   fontWeight: FontWeight.w700,
                 ),
@@ -283,7 +273,6 @@ class _VaultScreenState extends State<VaultScreen> {
                         width: 185,
                         height: 200,
                       ),
-
                     ),
                   ),
                 ),
@@ -327,12 +316,61 @@ class _VaultScreenState extends State<VaultScreen> {
           
           // Credentials List
           Expanded(
-            child: ListView.builder(
-              itemCount: _filteredCredentials.length,
-              itemBuilder: (context, index) {
-                final credential = _filteredCredentials[index];
-                return _buildCredentialItem(credential);
-              },
+            child: _isLoading 
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.cyanAccent,
+                  ),
+                )
+              : _filteredCredentials.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    itemCount: _filteredCredentials.length,
+                    itemBuilder: (context, index) {
+                      final credential = _filteredCredentials[index];
+                      return _buildCredentialItem(credential);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: Icon(
+              Icons.lock_outline,
+              size: 50,
+              color: Colors.grey[400],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'No Credentials Yet',
+            style: GoogleFonts.urbanist(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Add your first credential by\ntapping the + button below',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.urbanist(
+              fontSize: 14,
+              color: Colors.grey[600],
             ),
           ),
         ],
@@ -366,64 +404,110 @@ class _VaultScreenState extends State<VaultScreen> {
   }
 
   Widget _buildCredentialItem(Credential credential) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  credential.platform,
-                  style: GoogleFonts.urbanist(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  credential.email,
-                  style: GoogleFonts.urbanist(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
+    return GestureDetector(
+      onTap: () async {
+        // Navigate to view credential screen
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ViewCredentialScreen(credential: credential),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: credential.category.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(
-                color: credential.category.color.withOpacity(0.3),
-                width: 1,
+        );
+        
+        // Handle different results
+        if (result == 'deleted') {
+          await _refreshCredentials();
+          
+          // Show success message
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Credential deleted successfully',
+                  style: GoogleFonts.urbanist(),
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else if (result == 'updated') {
+          // ADDED: Handle updated credentials
+          await _refreshCredentials();
+          
+          // Show success message
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Credential updated successfully',
+                  style: GoogleFonts.urbanist(),
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    credential.platform,
+                    style: GoogleFonts.urbanist(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    credential.email,
+                    style: GoogleFonts.urbanist(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.person,
-                  size: 12,
-                  color: credential.category.color,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: credential.category.color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(
+                  color: credential.category.color.withOpacity(0.3),
+                  width: 1,
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  credential.category.displayName,
-                  style: GoogleFonts.urbanist(
-                    fontSize: 10,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.person,
+                    size: 12,
                     color: credential.category.color,
-                    fontWeight: FontWeight.w500,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Text(
+                    credential.category.displayName,
+                    style: GoogleFonts.urbanist(
+                      fontSize: 10,
+                      color: credential.category.color,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

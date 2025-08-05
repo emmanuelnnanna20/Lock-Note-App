@@ -8,6 +8,7 @@ class Credential {
   final CredentialCategory category;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String notes; // Added notes field
 
   Credential({
     required this.id,
@@ -17,7 +18,31 @@ class Credential {
     required this.category,
     required this.createdAt,
     required this.updatedAt,
+    this.notes = '', // Default to empty string
   });
+
+  // Copy method to create updated credential
+  Credential copyWith({
+    String? id,
+    String? platform,
+    String? email,
+    String? password,
+    CredentialCategory? category,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? notes,
+  }) {
+    return Credential(
+      id: id ?? this.id,
+      platform: platform ?? this.platform,
+      email: email ?? this.email,
+      password: password ?? this.password,
+      category: category ?? this.category,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      notes: notes ?? this.notes,
+    );
+  }
 }
 
 enum CredentialCategory {

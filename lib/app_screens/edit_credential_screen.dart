@@ -4,14 +4,16 @@ import 'package:locknote/models/credential_model.dart';
 import 'package:locknote/services/storage_service.dart';
 import 'dart:math';
 
-class AddCredentialScreen extends StatefulWidget {
-  const AddCredentialScreen({Key? key}) : super(key: key);
+class EditCredentialScreen extends StatefulWidget {
+  final Credential credential;
+
+  const EditCredentialScreen({Key? key, required this.credential}) : super(key: key);
 
   @override
-  State<AddCredentialScreen> createState() => _AddCredentialScreenState();
+  State<EditCredentialScreen> createState() => _EditCredentialScreenState();
 }
 
-class _AddCredentialScreenState extends State<AddCredentialScreen> {
+class _EditCredentialScreenState extends State<EditCredentialScreen> {
   final TextEditingController _platformController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -19,12 +21,48 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
   final TextEditingController _websiteController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   
-  CredentialCategory _selectedCategory = CredentialCategory.personal;
+  late CredentialCategory _selectedCategory;
   bool _isPasswordVisible = false;
   bool _showEmailField = false;
   bool _showUsernameField = false;
   bool _showWebsiteField = false;
   bool _showNoteField = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeFields();
+  }
+
+  void _initializeFields() {
+    // Pre-fill all fields with existing credential data
+    _platformController.text = widget.credential.platform;
+    _passwordController.text = widget.credential.password;
+    _selectedCategory = widget.credential.category;
+    
+    // Handle email field
+    if (widget.credential.email != 'N/A' && widget.credential.email.isNotEmpty) {
+      _emailController.text = widget.credential.email;
+      _showEmailField = true;
+    }
+    
+    // Handle notes field
+    if (widget.credential.notes.isNotEmpty) {
+      _noteController.text = widget.credential.notes;
+      _showNoteField = true;
+    }
+    
+    // For now, we'll show username and website fields if email is present
+    // You can modify this logic based on your requirements
+    if (widget.credential.email != 'N/A' && widget.credential.email.isNotEmpty) {
+      if (widget.credential.email.contains('@')) {
+        _usernameController.text = widget.credential.email.split('@')[0];
+        _showUsernameField = true;
+      }
+      _websiteController.text = 'www.${widget.credential.platform.toLowerCase()}.com';
+      _showWebsiteField = true;
+    }
+  }
 
   @override
   void dispose() {
@@ -65,36 +103,34 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
       return;
     }
 
-    // Create new credential - MODIFIED: Added notes field
-    final credential = Credential(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+    // Create updated credential with the same ID but new data
+    final updatedCredential = widget.credential.copyWith(
       platform: _platformController.text,
       email: _emailController.text.isNotEmpty ? _emailController.text : 'N/A',
       password: _passwordController.text,
       category: _selectedCategory,
-      createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
-      notes: _noteController.text, // ADDED: Save the notes from the controller
+      notes: _noteController.text,
     );
 
     try {
-      // Save to storage
-      await StorageService.addCredential(credential);
+      // Update in storage
+      await StorageService.updateCredential(updatedCredential);
       
       // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Credential saved successfully',
+              'Credential updated successfully',
               style: GoogleFonts.urbanist(),
             ),
             backgroundColor: Colors.green,
           ),
         );
         
-        // Return to vault screen with success result
-        Navigator.pop(context, 'saved');
+        // Return to previous screen with updated result
+        Navigator.pop(context, 'updated');
       }
     } catch (e) {
       // Show error message
@@ -102,7 +138,7 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Error saving credential: $e',
+              'Error updating credential: $e',
               style: GoogleFonts.urbanist(),
             ),
             backgroundColor: Colors.red,
@@ -124,7 +160,7 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Add Credentials',
+          'Edit Credentials',
           style: GoogleFonts.urbanist(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -197,7 +233,10 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
                         _emailController,
                         'Enter email address',
                         Icons.email_outlined,
-                        onRemove: () => setState(() => _showEmailField = false),
+                        onRemove: () => setState(() {
+                          _showEmailField = false;
+                          _emailController.clear();
+                        }),
                       ),
                     ],
                     
@@ -208,7 +247,10 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
                         _usernameController,
                         'Enter username',
                         Icons.person_outline,
-                        onRemove: () => setState(() => _showUsernameField = false),
+                        onRemove: () => setState(() {
+                          _showUsernameField = false;
+                          _usernameController.clear();
+                        }),
                       ),
                     ],
                     
@@ -219,7 +261,10 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
                         _websiteController,
                         'Enter website URL',
                         Icons.link,
-                        onRemove: () => setState(() => _showWebsiteField = false),
+                        onRemove: () => setState(() {
+                          _showWebsiteField = false;
+                          _websiteController.clear();
+                        }),
                       ),
                     ],
                     
@@ -231,7 +276,10 @@ class _AddCredentialScreenState extends State<AddCredentialScreen> {
                         'Enter note',
                         Icons.note_outlined,
                         maxLines: 3,
-                        onRemove: () => setState(() => _showNoteField = false),
+                        onRemove: () => setState(() {
+                          _showNoteField = false;
+                          _noteController.clear();
+                        }),
                       ),
                     ],
                   ],
